@@ -251,64 +251,76 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                <th className="py-3.5 px-4">Employee ID</th>
-                <th className="py-3.5 px-4">Employee Name</th>
-                <th className="py-3.5 px-4">Department</th>
-                <th className="py-3.5 px-4">Shift</th>
-                <th className="py-3.5 px-4">In Time</th>
-                <th className="py-3.5 px-4">Out Time</th>
-                <th className="py-3.5 px-4">H₂S Level</th>
-                <th className="py-3.5 px-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {h2sScans.map((scan) => {
-                const emp = employees.find(e => e.employeeId === scan.employeeId);
-                const att = attendance.find(a => a.employeeId === scan.employeeId);
-                return (
-                  <tr
-                    key={scan.id}
-                    onClick={() => emp && onSelectEmployee(emp)}
-                    className="hover:bg-slate-50/80 transition-colors cursor-pointer"
-                  >
-                    <td className="py-3.5 px-4 font-mono font-bold text-amber-700">
-                      {scan.employeeId}
-                    </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-900">
-                      {scan.employeeName}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">
-                      {scan.department}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-mono font-semibold">
-                        {scan.shift}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600">
-                      {att?.inTime || '06:00 AM'}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-500">
-                      {att?.outTime || 'On Shift'}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-bold">
-                      <span className={scan.exposurePpm > 15 ? 'text-red-600' : scan.exposurePpm > 5 ? 'text-amber-600' : 'text-emerald-600'}>
-                        {scan.exposurePpm} ppm
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {getStatusBadge(scan.exposureLevel)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {h2sScans.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center space-y-2">
+            <ShieldCheck className="w-8 h-8 text-slate-300" />
+            <span className="text-sm font-bold text-slate-700">No H₂S scan data available</span>
+            <p className="text-xs text-slate-400">Worker gas exposure readings will appear here once scans are completed.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                  <th className="py-3.5 px-4">Employee ID</th>
+                  <th className="py-3.5 px-4">Employee Name</th>
+                  <th className="py-3.5 px-4">Department</th>
+                  <th className="py-3.5 px-4">Shift</th>
+                  <th className="py-3.5 px-4">In Time</th>
+                  <th className="py-3.5 px-4">Out Time</th>
+                  <th className="py-3.5 px-4">H₂S Level</th>
+                  <th className="py-3.5 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {h2sScans.map((scan) => {
+                  const emp = employees.find(e => e.employeeId === scan.employeeId);
+                  const att = attendance.find(a => a.employeeId === scan.employeeId);
+                  return (
+                    <tr
+                      key={scan.id}
+                      onClick={() => emp && onSelectEmployee(emp)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                    >
+                      <td className="py-3.5 px-4 font-mono font-bold text-amber-700">
+                        {scan.employeeId}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-900">
+                        {scan.employeeName}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600 font-medium">
+                        {scan.department}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-mono font-semibold">
+                          {scan.shift}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-600">
+                        {att?.inTime || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-500">
+                        {att?.outTime || (att?.status === 'Currently Working' ? 'Active On Shift' : '-')}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-bold">
+                        {scan.finalStripScan?.scanned ? (
+                          <span className={scan.exposurePpm > 15 ? 'text-red-600' : scan.exposurePpm > 5 ? 'text-amber-600' : 'text-emerald-600'}>
+                            {scan.exposurePpm} ppm
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">--</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {getStatusBadge(scan.exposureLevel)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

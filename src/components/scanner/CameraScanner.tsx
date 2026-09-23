@@ -18,15 +18,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSucces
   const qrRegionId = "html5qr-code-full-region";
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasScannedRef = useRef(false);
 
   // For H2S camera mode
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const detectionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const detectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    hasScannedRef.current = false;
     if (activeTab === 'camera') {
       if (mode === 'QR') {
         startQRScanner();
@@ -45,6 +47,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSucces
 
   const startQRScanner = async () => {
     try {
+      hasScannedRef.current = false;
       const html5QrCode = new Html5Qrcode(qrRegionId);
       html5QrCodeRef.current = html5QrCode;
       
@@ -52,6 +55,8 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSucces
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
+          if (hasScannedRef.current) return;
+          hasScannedRef.current = true;
           stopCamera();
           onScanSuccess(decodedText, null);
         },
@@ -203,10 +208,13 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSucces
 
     if (mode === 'QR') {
       try {
+        if (hasScannedRef.current) return;
+        hasScannedRef.current = true;
         const html5QrCode = new Html5Qrcode(qrRegionId);
         const decodedText = await html5QrCode.scanFileV2(file);
         onScanSuccess(decodedText.decodedText, null);
       } catch (err) {
+        hasScannedRef.current = false;
         setError("Could not decode QR code from image.");
       }
     } else {

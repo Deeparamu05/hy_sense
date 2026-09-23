@@ -14,6 +14,8 @@ router.get('/', (req, res) => {
       if (err) return res.status(500).json({ error: err.message });
       const formatted = rows.map(r => ({
         ...r,
+        exposurePpm: r.exposurePpm != null ? Number(r.exposurePpm) : 0,
+        analysisStatus: r.analysisStatus || (r.finalScan && JSON.parse(r.finalScan).scanned ? 'Analysis Complete' : 'Pending Final Scan'),
         initialStripScan: r.initialScan ? JSON.parse(r.initialScan) : { scanned: false },
         finalStripScan: r.finalScan ? JSON.parse(r.finalScan) : { scanned: false }
       }));
@@ -35,6 +37,8 @@ router.get('/:employeeId', (req, res) => {
       if (err) return res.status(500).json({ error: err.message });
       const formatted = rows.map(r => ({
         ...r,
+        exposurePpm: r.exposurePpm != null ? Number(r.exposurePpm) : 0,
+        analysisStatus: r.analysisStatus || (r.finalScan && JSON.parse(r.finalScan).scanned ? 'Analysis Complete' : 'Pending Final Scan'),
         initialStripScan: r.initialScan ? JSON.parse(r.initialScan) : { scanned: false },
         finalStripScan: r.finalScan ? JSON.parse(r.finalScan) : { scanned: false }
       }));
@@ -45,7 +49,7 @@ router.get('/:employeeId', (req, res) => {
 
 // POST new strip
 router.post('/', (req, res) => {
-  const { employeeId, date, shift, initialStripScan, finalStripScan, initialImage, finalImage, exposureLevel, analysisStatus } = req.body;
+  const { employeeId, date, shift, initialStripScan, finalStripScan, initialImage, finalImage, exposureLevel, exposurePpm, analysisStatus, stripColor, estimatedPpmDisplay } = req.body;
   const id = `strip-${Date.now()}`;
   const timestamp = new Date().toISOString();
   
@@ -53,9 +57,9 @@ router.post('/', (req, res) => {
   const finalScanStr = finalStripScan ? JSON.stringify(finalStripScan) : null;
 
   db.run(
-    `INSERT INTO strip_records (id, employeeId, date, shift, initialScan, finalScan, initialImage, finalImage, exposureLevel, timestamp) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, employeeId, date, shift, initialScanStr, finalScanStr, initialImage, finalImage, exposureLevel, timestamp],
+    `INSERT INTO strip_records (id, employeeId, date, shift, initialScan, finalScan, initialImage, finalImage, exposureLevel, exposurePpm, analysisStatus, timestamp, stripColor, estimatedPpmDisplay) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, employeeId, date, shift, initialScanStr, finalScanStr, initialImage, finalImage, exposureLevel, exposurePpm != null ? exposurePpm : null, analysisStatus || 'Pending Final Scan', timestamp, stripColor || null, estimatedPpmDisplay || null],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       db.get(
@@ -67,9 +71,10 @@ router.post('/', (req, res) => {
         (err, row) => {
           if (err) return res.status(500).json({ error: err.message });
           if (row) {
+            row.exposurePpm = row.exposurePpm != null ? Number(row.exposurePpm) : 0;
+            row.analysisStatus = row.analysisStatus || analysisStatus || 'Pending Final Scan';
             row.initialStripScan = row.initialScan ? JSON.parse(row.initialScan) : { scanned: false };
             row.finalStripScan = row.finalScan ? JSON.parse(row.finalScan) : { scanned: false };
-            row.analysisStatus = analysisStatus;
           }
           res.status(201).json(row);
         }
@@ -81,13 +86,13 @@ router.post('/', (req, res) => {
 // PUT update strip
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { finalStripScan, finalImage, exposureLevel, analysisStatus } = req.body;
+  const { finalStripScan, finalImage, exposureLevel, exposurePpm, analysisStatus, stripColor, estimatedPpmDisplay } = req.body;
   
   const finalScanStr = finalStripScan ? JSON.stringify(finalStripScan) : null;
 
   db.run(
-    `UPDATE strip_records SET finalScan = ?, finalImage = ?, exposureLevel = ? WHERE id = ?`,
-    [finalScanStr, finalImage, exposureLevel, id],
+    `UPDATE strip_records SET finalScan = ?, finalImage = ?, exposureLevel = ?, exposurePpm = ?, analysisStatus = ?, stripColor = COALESCE(?, stripColor), estimatedPpmDisplay = COALESCE(?, estimatedPpmDisplay) WHERE id = ?`,
+    [finalScanStr, finalImage, exposureLevel, exposurePpm != null ? exposurePpm : 0, analysisStatus || 'Analysis Complete', stripColor || null, estimatedPpmDisplay || null, id],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       if (this.changes === 0) return res.status(404).json({ error: 'Strip record not found' });
@@ -100,9 +105,10 @@ router.put('/:id', (req, res) => {
         (err, row) => {
           if (err) return res.status(500).json({ error: err.message });
           if (row) {
+            row.exposurePpm = row.exposurePpm != null ? Number(row.exposurePpm) : 0;
+            row.analysisStatus = row.analysisStatus || analysisStatus || 'Analysis Complete';
             row.initialStripScan = row.initialScan ? JSON.parse(row.initialScan) : { scanned: false };
             row.finalStripScan = row.finalScan ? JSON.parse(row.finalScan) : { scanned: false };
-            row.analysisStatus = analysisStatus;
           }
           res.json(row);
         }

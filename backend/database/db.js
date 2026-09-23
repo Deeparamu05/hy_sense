@@ -51,8 +51,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
         initialImage TEXT,
         finalImage TEXT,
         exposureLevel TEXT,
+        exposurePpm REAL,
+        analysisStatus TEXT,
         timestamp TEXT
       )`);
+
+      // Ensure exposurePpm and analysisStatus columns exist if table was already created
+      db.run(`ALTER TABLE strip_records ADD COLUMN exposurePpm REAL`, () => {});
+      db.run(`ALTER TABLE strip_records ADD COLUMN analysisStatus TEXT`, () => {});
+      db.run(`ALTER TABLE strip_records ADD COLUMN stripColor TEXT`, () => {});
+      db.run(`ALTER TABLE strip_records ADD COLUMN estimatedPpmDisplay TEXT`, () => {});
 
       // Alerts Table
       db.run(`CREATE TABLE IF NOT EXISTS alerts (

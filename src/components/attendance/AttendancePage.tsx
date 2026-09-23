@@ -10,7 +10,7 @@ interface AttendancePageProps {
   onRefreshData?: () => void;
 }
 
-export const AttendancePage: React.FC<AttendancePageProps> = ({ attendanceRecords }) => {
+export const AttendancePage: React.FC<AttendancePageProps> = ({ attendanceRecords, onRefreshData }) => {
   // Default to today's date in YYYY-MM-DD format
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,8 +20,13 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ attendanceRecord
 
   // Scanner State
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannedEmployee, setScannedEmployee] = useState<Employee | null>(null);
-  const [scanMessage, setScanMessage] = useState<{ type: 'error'|'success', text: string } | null>(null);
+  const [scannedModalData, setScannedModalData] = useState<{
+    employee: Employee;
+    shift: ShiftType;
+    time: string;
+    isAlreadyMarked: boolean;
+  } | null>(null);
+  const [scanMessage, setScanMessage] = useState<{ type: 'error' | 'success' | 'warning'; text: string } | null>(null);
 
   // First filter by date, then by search/dept/shift/status
   const dateFiltered = attendanceRecords.filter((rec) => rec.date === selectedDate);
@@ -254,77 +259,120 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ attendanceRecord
             try {
               const allEmps = await dataService.getEmployees();
               const emp = allEmps.find(e => e.employeeId === empId);
-              if (emp) {
-                // Automatically log attendance
-                const today = new Date().toISOString().slice(0, 10);
-                const existingRecord = attendanceRecords.find(r => r.employeeId === emp.employeeId && r.date === today);
-                const nowString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                if (!existingRecord) {
-                  await dataService.createAttendanceRecord({
-                    employeeId: emp.employeeId,
-                    employeeName: emp.employeeName,
-                    department: emp.department,
-                    shift: emp.shift,
-                    date: today,
-                    inTime: nowString,
-                    outTime: null,
-                    status: 'Currently Working'
-                  });
-                  setScanMessage({ type: 'success', text: `Attendance IN Recorded for ${emp.employeeName}` });
-                  setScannedEmployee(emp); // show details
-                } else if (existingRecord.status === 'Currently Working') {
-                  await dataService.updateAttendanceRecord(existingRecord.id, {
-                    outTime: nowString,
-                    status: 'Completed'
-                  });
-                  setScanMessage({ type: 'success', text: `Attendance OUT Recorded for ${emp.employeeName}` });
-                  setScannedEmployee(emp); // show details
-                } else {
-                  setScanMessage({ type: 'error', text: `Today's attendance already completed for ${emp.employeeName}` });
-                  setScannedEmployee(null);
-                }
-                
-                if (onRefreshData) onRefreshData();
-              } else {
+              if (!emp) {
                 setScanMessage({ type: 'error', text: `Employee ${empId} not found in database.` });
-                setScannedEmployee(null);
+                return;
+              }
+
+              const today = new Date().toISOString().slice(0, 10);
+              const nowString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              // Duplicate-check key: employeeId + date + shift
+              const existingRecord = attendanceRecords.find(
+                r => r.employeeId === emp.employeeId && r.date === today && r.shift === emp.shift
+              );
+
+              if (existingRecord) {
+                // Already marked: do NOT create another record or alter status
+                setScanMessage({ type: 'warning', text: 'Attendance already marked' });
+                setScannedModalData({
+                  employee: emp,
+                  shift: emp.shift,
+                  time: existingRecord.inTime || nowString,
+                  isAlreadyMarked: true
+                });
+                return;
+              }
+
+              // Not yet marked: mark attendance automatically ONE TIME
+              const res: any = await dataService.createAttendanceRecord({
+                employeeId: emp.employeeId,
+                employeeName: emp.employeeName,
+                department: emp.department,
+                shift: emp.shift,
+                date: today,
+                inTime: nowString,
+                outTime: null,
+                status: 'Currently Working'
+              });
+
+              if (res && res.alreadyMarked) {
+                setScanMessage({ type: 'warning', text: 'Attendance already marked' });
+                setScannedModalData({
+                  employee: emp,
+                  shift: emp.shift,
+                  time: res.inTime || nowString,
+                  isAlreadyMarked: true
+                });
+              } else {
+                setScanMessage({ type: 'success', text: '✓ Attendance Marked' });
+                setScannedModalData({
+                  employee: emp,
+                  shift: emp.shift,
+                  time: nowString,
+                  isAlreadyMarked: false
+                });
+                if (onRefreshData) onRefreshData();
               }
             } catch (err) {
               setScanMessage({ type: 'error', text: 'Backend Error. Could not process attendance.' });
-              setScannedEmployee(null);
             }
           }}
         />
       )}
 
-      {/* Scanned Employee Modal */}
-      {scannedEmployee && (
+      {/* Scanned Employee / Attendance Modal */}
+      {scannedModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h2 className="text-base font-bold text-slate-900">Attendance Updated Successfully</h2>
-              <button onClick={() => setScannedEmployee(null)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 transition-colors">
+              <h2 className="text-base font-bold text-slate-900">
+                {scannedModalData.isAlreadyMarked ? 'Attendance already marked' : '✓ Attendance Marked'}
+              </h2>
+              <button onClick={() => setScannedModalData(null)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 space-y-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-2xl mx-auto">
-                <CheckCircle className="w-8 h-8" />
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto ${
+                scannedModalData.isAlreadyMarked ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {scannedModalData.isAlreadyMarked ? <Clock className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">{scannedEmployee.employeeName}</h3>
-                <p className="font-mono text-emerald-700 font-bold">{scannedEmployee.employeeId}</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mb-2 ${
+                  scannedModalData.isAlreadyMarked ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                }`}>
+                  {scannedModalData.isAlreadyMarked ? 'Attendance already marked' : '✓ Attendance Marked'}
+                </span>
+                <h3 className="text-xl font-bold text-slate-900">{scannedModalData.employee.employeeName}</h3>
+                <p className="font-mono text-amber-700 font-bold">{scannedModalData.employee.employeeId}</p>
               </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-600 flex justify-between">
-                <span>Dept: <strong>{scannedEmployee.department}</strong></span>
-                <span>Shift: <strong>{scannedEmployee.shift}</strong></span>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-2 text-left">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Worker Name:</span>
+                  <span className="font-bold text-slate-900">{scannedModalData.employee.employeeName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Employee ID:</span>
+                  <span className="font-mono font-bold text-amber-700">{scannedModalData.employee.employeeId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Shift:</span>
+                  <span className="font-bold text-slate-900">{scannedModalData.shift}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Time:</span>
+                  <span className="font-mono font-bold text-slate-900">{scannedModalData.time}</span>
+                </div>
               </div>
               <button
-                onClick={() => setScannedEmployee(null)}
-                className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+                onClick={() => setScannedModalData(null)}
+                className={`w-full py-3 rounded-xl text-white font-bold text-sm shadow-md transition-all cursor-pointer ${
+                  scannedModalData.isAlreadyMarked ? 'bg-amber-600 hover:bg-amber-500' : 'bg-slate-900 hover:bg-slate-800'
+                }`}
               >
-                Close
+                {scannedModalData.isAlreadyMarked ? 'Continue' : 'Close'}
               </button>
             </div>
           </div>
@@ -333,12 +381,24 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ attendanceRecord
 
       {/* Global Message Banner */}
       {scanMessage && (
-        <div className={`fixed bottom-6 right-6 p-4 rounded-2xl shadow-xl flex items-center space-x-3 text-sm font-bold animate-fadeIn ${
-          scanMessage.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+        <div className={`fixed bottom-6 right-6 p-4 rounded-2xl shadow-xl flex items-center space-x-3 text-sm font-bold animate-fadeIn z-50 ${
+          scanMessage.type === 'error'
+            ? 'bg-red-50 text-red-800 border border-red-200'
+            : scanMessage.type === 'warning'
+            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
         }`}>
-          {scanMessage.type === 'error' ? <UserX className="w-5 h-5 text-red-600" /> : <CheckCircle className="w-5 h-5 text-emerald-600" />}
+          {scanMessage.type === 'error' ? (
+            <UserX className="w-5 h-5 text-red-600" />
+          ) : scanMessage.type === 'warning' ? (
+            <Clock className="w-5 h-5 text-amber-600" />
+          ) : (
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
+          )}
           <span>{scanMessage.text}</span>
-          <button onClick={() => setScanMessage(null)} className="ml-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+          <button onClick={() => setScanMessage(null)} className="ml-2 text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

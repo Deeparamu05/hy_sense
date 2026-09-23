@@ -20,23 +20,42 @@ router.get('/', (req, res) => {
 // POST new attendance
 router.post('/', (req, res) => {
   const { employeeId, date, shift, inTime, outTime, status } = req.body;
-  const id = `att-${Date.now()}`;
-  
-  db.run(
-    `INSERT INTO attendance (id, employeeId, date, shift, inTime, outTime, status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, employeeId, date, shift, inTime, outTime, status],
-    function (err) {
+
+  // Duplicate-check key: employeeId + date + shift
+  db.get(
+    `SELECT a.*, e.employeeName, e.department 
+     FROM attendance a 
+     LEFT JOIN employees e ON a.employeeId = e.employeeId 
+     WHERE a.employeeId = ? AND a.date = ? AND a.shift = ?`,
+    [employeeId, date, shift],
+    (err, existing) => {
       if (err) return res.status(500).json({ error: err.message });
-      db.get(
-        `SELECT a.*, e.employeeName, e.department 
-         FROM attendance a 
-         LEFT JOIN employees e ON a.employeeId = e.employeeId 
-         WHERE a.id = ?`, 
-        [id], 
-        (err, row) => {
+      if (existing) {
+        return res.status(200).json({
+          ...existing,
+          alreadyMarked: true,
+          message: 'Attendance already marked'
+        });
+      }
+
+      const id = `att-${Date.now()}`;
+      db.run(
+        `INSERT INTO attendance (id, employeeId, date, shift, inTime, outTime, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, employeeId, date, shift, inTime, outTime, status],
+        function (err) {
           if (err) return res.status(500).json({ error: err.message });
-          res.status(201).json(row);
+          db.get(
+            `SELECT a.*, e.employeeName, e.department 
+             FROM attendance a 
+             LEFT JOIN employees e ON a.employeeId = e.employeeId 
+             WHERE a.id = ?`, 
+            [id], 
+            (err, row) => {
+              if (err) return res.status(500).json({ error: err.message });
+              res.status(201).json(row);
+            }
+          );
         }
       );
     }

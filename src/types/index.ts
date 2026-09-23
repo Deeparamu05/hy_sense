@@ -32,8 +32,8 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
-export type ExposureLevel = 'Safe' | 'Caution' | 'High' | 'Critical' | 'Pending';
-export type AnalysisStatus = 'Completed' | 'Processing' | 'Pending' | 'Failed';
+export type ExposureLevel = 'Safe' | 'Caution' | 'High' | 'Critical' | 'Pending' | 'Low' | 'Moderate' | 'Very High / Critical';
+export type AnalysisStatus = 'Completed' | 'Processing' | 'Pending' | 'Failed' | 'Analysis Complete' | 'Pending Final Scan';
 
 export interface H2SScanRecord {
   id: string;
@@ -41,18 +41,23 @@ export interface H2SScanRecord {
   employeeName: string;
   department: Department;
   shift: ShiftType;
+  date?: string;
   timestamp: string; // e.g. 2026-09-18 08:30 AM
   initialStripScan: {
     scanned: boolean;
-    scannedAt: string;
+    scannedAt?: string;
     imageUrl?: string;
+    imageBase64?: string;
   };
   finalStripScan: {
     scanned: boolean;
-    scannedAt: string | null;
+    scannedAt?: string | null;
     imageUrl?: string;
+    imageBase64?: string;
   };
-  exposurePpm: number; // calculated H2S ppm level by backend (e.g. 3.2, 14.5)
+  exposurePpm: number; // approximate estimated H2S ppm level
+  estimatedPpmDisplay?: string; // e.g. "~10 - 20 ppm (Est.)"
+  stripColor?: string; // detected strip colour name e.g. "Dark Brown"
   exposureLevel: ExposureLevel;
   analysisStatus: AnalysisStatus;
 }
@@ -66,9 +71,12 @@ export interface SafetyAlert {
   employeeName: string;
   department: Department;
   shift: ShiftType;
-  alertType: AlertType;
-  exposureLevel: ExposureLevel;
-  exposurePpm: number;
+  alertType?: AlertType;
+  type?: string;
+  severity?: string;
+  message?: string;
+  exposureLevel?: ExposureLevel;
+  exposurePpm?: number;
   timestamp: string;
   status: AlertStatus;
   notes?: string;

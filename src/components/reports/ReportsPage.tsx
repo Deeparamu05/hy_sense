@@ -52,7 +52,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       headers = ['Department', 'Total Workers', 'Safe Scans', 'Caution Scans', 'High Exposure Alerts', 'Critical Evacuations'];
       const depts = ['Operations', 'Production', 'Maintenance', 'Electrical', 'Laboratory'];
       rows = depts.map(dept => {
-        const empCount = employees.filter(e => e.department === dept).length || 5;
+        const empCount = employees.filter(e => e.department === dept).length;
         const scans = h2sScans.filter(s => s.department === dept);
         return [
           dept,
@@ -72,12 +72,12 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       ];
       rows = shifts.map(sh => {
         const shScans = h2sScans.filter(s => s.shift === sh.name);
-        const avgPpm = shScans.length ? (shScans.reduce((acc, s) => acc + s.exposurePpm, 0) / shScans.length).toFixed(2) : '3.40';
+        const avgPpm = shScans.length ? (shScans.reduce((acc, s) => acc + s.exposurePpm, 0) / shScans.length).toFixed(2) : '0.00';
         const incidents = shScans.filter(s => s.exposureLevel === 'High' || s.exposureLevel === 'Critical').length;
         return [
           sh.name,
           `"${sh.range}"`,
-          employees.filter(e => e.shift === sh.name).length || 8,
+          employees.filter(e => e.shift === sh.name).length,
           avgPpm,
           incidents
         ];
